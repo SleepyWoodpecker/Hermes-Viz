@@ -11,7 +11,7 @@ import (
 )
 
 const PORT_NAME = "/dev/cu.usbserial-0001"
-const MSG_SIZE = 150
+const MSG_SIZE = 68 + 2
 
 const (
     ENTER = iota
@@ -50,7 +50,7 @@ type TraceFunctionExitEntry struct {
 type TraceFunctionPanicEntry struct {
 	TraceFunctionGeneralEntry
 	FaultingPC 			uint32
-	ExceptionReason 	[128]byte
+	ExceptionReason 	[48]byte
 }
 
 func main() {
@@ -102,11 +102,15 @@ func main() {
         case EXIT:
             entry := TraceFunctionExitEntry{}
             if err := binary.Read(streamReader, binary.LittleEndian, &entry); err != nil {
-				fmt.Printf("Error reading ENTER entry: %v\n", err)
+				fmt.Printf("Error reading EXIT entry: %v\n", err)
 			}
 			traceEntry = entry
         case PANIC:
-            fmt.Println("PANIC")
+            entry := TraceFunctionPanicEntry{}
+            if err := binary.Read(streamReader, binary.LittleEndian, &entry); err != nil {
+				fmt.Printf("Error reading PANIC entry: %v\n", err)
+			}
+			traceEntry = entry
         default:
             fmt.Println("Unsure")
         }
