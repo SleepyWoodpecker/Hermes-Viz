@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"unsafe"
@@ -18,9 +19,12 @@ const (
     PANIC
 )
 
+// alignment is based on the largest single type
+// in this case, align everything to 4 bytes
 type TraceFunctionGeneralEntry struct {
-	TraceType   uint8
+	TraceType   uint32
     CoreId      uint8
+	_ 			[3]uint8
     Timestamp   uint32
     Trace_id    uint32
 }
@@ -29,6 +33,7 @@ type TraceFunctionEnterEntry struct {
     TraceFunctionGeneralEntry
     ValueTypes  uint8
     ArgCount    uint8
+	_ 			[2]uint8
     FuncArgs    [4]uint32
     FuncName    [16]byte
 }
@@ -36,10 +41,16 @@ type TraceFunctionEnterEntry struct {
 type TraceFunctionExitEntry struct {
     TraceFunctionGeneralEntry
     ValueTypes  uint8
-    _           uint8
+    _           [3]uint8
     ReturnVal   uint32
     _           [3]uint32
     FuncName    [16]byte
+}
+
+type TraceFunctionPanicEntry struct {
+	TraceFunctionGeneralEntry
+	FaultingPC 			uint32
+	ExceptionReason 	[128]byte
 }
 
 func main() {
@@ -71,23 +82,36 @@ func main() {
 
         if !bytes.Equal(tempBuf[len(tempBuf) - 2 : ], []byte{'\r', '\n'}) {
             fmt.Printf("Control sequence at the end incorrect, %v\n", tempBuf[len(tempBuf) - 2 : ])
+			sync(port)
             continue
         }
 
         // try to access the first byte of the message
         // which would give you information on what type of entry it is
         typePointer := unsafe.Pointer(&tempBuf[0])
-        
-        switch *(*uint8)(typePointer) {
+
+        var traceEntry any
+        streamReader := bytes.NewReader(tempBuf[:len(tempBuf) - 2])
+        switch *(*uint32)(typePointer) {
         case ENTER:
-            fmt.Println("ENTER")
+			entry := TraceFunctionEnterEntry{}
+            if err := binary.Read(streamReader, binary.LittleEndian, &entry); err != nil {
+				fmt.Printf("Error reading ENTER entry: %v\n", err)
+			}
+			traceEntry = entry
         case EXIT:
-            fmt.Println("EXIT")
+            entry := TraceFunctionExitEntry{}
+            if err := binary.Read(streamReader, binary.LittleEndian, &entry); err != nil {
+				fmt.Printf("Error reading ENTER entry: %v\n", err)
+			}
+			traceEntry = entry
         case PANIC:
             fmt.Println("PANIC")
         default:
             fmt.Println("Unsure")
         }
+
+		fmt.Printf("Got: %+v\n", traceEntry)
 	}
 }
 
