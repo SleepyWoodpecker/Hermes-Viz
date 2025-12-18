@@ -48,9 +48,17 @@ const (
 // alignment is based on the largest single type
 // in this case, align everything to 4 bytes
 type TraceFunctionGeneralEntry struct {
+	TraceType   uint32 
+    CoreId      uint32
+    Timestamp   uint32
+    TraceId    	uint32
+	FuncNumId	uint32
+}
+
+type FormattedTraceFunctionGeneralEntry struct {
 	TraceType   uint32 	`json:"traceType"`
     CoreId      uint32	`json:"coreId"`
-    Timestamp   uint32	`json:"timestamp"`
+    Timestamp   int64	`json:"timestamp"`
     TraceId    	uint32	`json:"traceId"`
 	FuncNumId	uint32	`json:"funcCallId"`
 }
@@ -86,7 +94,7 @@ type TraceFunctionRestartEntry struct {
 
 // make another type to account for the fact that the arguments could be floats
 type FormattedTraceFunctionEnterEntry struct {
-	TraceFunctionGeneralEntry
+	FormattedTraceFunctionGeneralEntry
 	ArgCount	uint8			`json:"argCount"`
     FuncArgs    [4]interface{} 	`json:"funcArgs"`
     FuncName    string			`json:"funcName"`
@@ -94,14 +102,14 @@ type FormattedTraceFunctionEnterEntry struct {
 }
 
 type FormattedTraceFunctionExitEntry struct {
-	TraceFunctionGeneralEntry
+	FormattedTraceFunctionGeneralEntry
     ReturnVal   interface{}			`json:"returnVal"`
     FuncName    string				`json:"funcName"`
 	PacketId	string			`json:"packetId"`
 }
 
 type FormattedTraceFunctionPanicEntry struct {
-	TraceFunctionGeneralEntry
+	FormattedTraceFunctionGeneralEntry
 	FaultingPC 			uint32 		`json:"faultingPC"`
 	ExceptionReason 	string		`json:"exceptionReason"`
 	PacketId	string			`json:"packetId"`
@@ -117,6 +125,7 @@ type Processor struct {
 	MessageQueue <-chan [RAW_PACKET_SIZE]byte
 	PortName 	string
 	SocketManager *SocketManager
+	timeKeeper	*TimeKeeper
 }
 
 func NewProcessor(portname string, messageQueue <-chan [RAW_PACKET_SIZE]byte, sm *SocketManager) *Processor {
@@ -124,6 +133,7 @@ func NewProcessor(portname string, messageQueue <-chan [RAW_PACKET_SIZE]byte, sm
 		MessageQueue: messageQueue,
 		PortName: portname,
 		SocketManager: sm,
+		timeKeeper: NewTimeKeeper(),
 	}
 }
 
@@ -183,10 +193,10 @@ func (p *Processor) processEntry(entry *TraceFunctionEnterEntry) {
 	buffer := [4]interface{}{}	
 	formatFuncArgsFromBuffer(&buffer, entry.FuncArgs, entry.ValueTypes)
 	dataToSend := FormattedTraceFunctionEnterEntry{
-		TraceFunctionGeneralEntry: TraceFunctionGeneralEntry{
+		FormattedTraceFunctionGeneralEntry: FormattedTraceFunctionGeneralEntry{
 			TraceType: entry.TraceType,
 			CoreId: entry.CoreId,
-			Timestamp: entry.Timestamp,
+			Timestamp: p.timeKeeper.GetTimestampToSend(entry.Timestamp),
 			TraceId: entry.TraceId,
 			FuncNumId: entry.FuncNumId,
 		},
@@ -202,10 +212,10 @@ func (p *Processor) processEntry(entry *TraceFunctionEnterEntry) {
 func (p *Processor) processExit(entry *TraceFunctionExitEntry) {
 	formattedReturnVal := formatFuncArg(entry.ReturnVal, entry.ValueTypes, 0)
 	dataToSend := FormattedTraceFunctionExitEntry{
-		TraceFunctionGeneralEntry: TraceFunctionGeneralEntry{
+		FormattedTraceFunctionGeneralEntry: FormattedTraceFunctionGeneralEntry{
 			TraceType: entry.TraceType,
 			CoreId: entry.CoreId,
-			Timestamp: entry.Timestamp,
+			Timestamp: p.timeKeeper.GetTimestampToSend(entry.Timestamp),
 			TraceId: entry.TraceId,
 			FuncNumId: entry.FuncNumId,
 		},
@@ -219,10 +229,10 @@ func (p *Processor) processExit(entry *TraceFunctionExitEntry) {
 
 func (p *Processor) processPanic(entry *TraceFunctionPanicEntry) {
 	dataToSend := FormattedTraceFunctionPanicEntry{
-		TraceFunctionGeneralEntry: TraceFunctionGeneralEntry{
+		FormattedTraceFunctionGeneralEntry: FormattedTraceFunctionGeneralEntry{
 			TraceType: entry.TraceType,
 			CoreId: entry.CoreId,
-			Timestamp: entry.Timestamp,
+			Timestamp: p.timeKeeper.GetTimestampToSend(entry.Timestamp),
 			TraceId: entry.TraceId,
 			FuncNumId: entry.FuncNumId,
 		},
@@ -240,6 +250,7 @@ func (p *Processor) processRestart(entry *TraceFunctionRestartEntry) {
 		PacketId: xid.New().String(),
 	}
 	p.SocketManager.Broadcast(dataToSend)
+	p.timeKeeper.HandleBoardReset()
 }
 
 func formatFuncArgsFromBuffer(buffer *[4]interface{}, funcArgs [4]uint32, valueTypes uint8) {
