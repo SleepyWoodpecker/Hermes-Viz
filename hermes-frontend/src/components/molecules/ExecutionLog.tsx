@@ -18,7 +18,7 @@ export default function ExecutionLog({ executionLog }: ExecutionLogProps) {
                 {executionLog.length === 0 ? (
                     <div>Waiting for logs...</div> // TODO: could make this a loading skeleton
                 ) : (
-                    <div className="flex flex-col gap-2">
+                    <div className="max-h-[calc(100vh-260px)] space-y-2 overflow-y-auto pr-1">
                         {executionLog.map((sample) => {
                             return (
                                 <ExecutionLogCard
