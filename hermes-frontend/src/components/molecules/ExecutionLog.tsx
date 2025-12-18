@@ -17,7 +17,14 @@ export default function ExecutionLog({ executionLog }: ExecutionLogProps) {
                 ) : (
                     <div className="flex flex-col gap-2">
                         {executionLog.map((sample) => (
-                            <ExecutionLogCard entry={sample} />
+                            <ExecutionLogCard
+                                entry={sample}
+                                key={`${sample.traceType},${sample.timestamp}${
+                                    sample.traceType === TraceTypes.RESTART
+                                        ? ``
+                                        : `${sample.traceId},${sample.funcCallId}`
+                                }`}
+                            />
                         ))}
                     </div>
                 )}
