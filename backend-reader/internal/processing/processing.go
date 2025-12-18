@@ -26,8 +26,7 @@ const (
 // in this case, align everything to 4 bytes
 type TraceFunctionGeneralEntry struct {
 	TraceType   uint32 	`json:"traceType"`
-    CoreId      uint8	`json:"coreId"`
-	_ 			[3]uint8
+    CoreId      uint32	`json:"coreId"`
     Timestamp   uint32	`json:"timestamp"`
     TraceId    	uint32	`json:"traceId"`
 	FuncNumId	uint32	`json:"funcCallId"`
@@ -53,8 +52,8 @@ type TraceFunctionExitEntry struct {
 
 type TraceFunctionPanicEntry struct {
 	TraceFunctionGeneralEntry
-	FaultingPC 			uint32
-	ExceptionReason 	[48]byte
+	FaultingPC 			uint32 		`json:"faultingPC"`
+	ExceptionReason 	[48]byte	`json:"exceptionReason"`
 }
 
 // make another type to account for the fact that the arguments could be floats
@@ -92,7 +91,7 @@ func (p *Processor) Process() {
 	// which would give you information on what type of entry it is
 	typePointer := unsafe.Pointer(&tempBuf[0])
 
-	streamReader := bytes.NewReader(tempBuf[:len(tempBuf) - 2])
+	streamReader := bytes.NewReader(tempBuf[:])
 	switch *(*uint32)(typePointer) {
 	case ENTER:
 		entry := TraceFunctionEnterEntry{}
@@ -115,12 +114,10 @@ func (p *Processor) Process() {
 	case PANIC:
 		entry := TraceFunctionPanicEntry{}
 		if err := binary.Read(streamReader, binary.LittleEndian, &entry); err != nil {
-			if !strings.Contains(err.Error(), "EOF") {
-				fmt.Printf("Error reading PANIC entry: %v\n", err)
-				return
-			}
+			fmt.Printf("Error reading PANIC entry: %v\n", err)
+			return
 		}
-		processPanic(&entry)
+		p.processPanic(&entry)
 	default:
 		fmt.Println("Unsure")
 	}
@@ -168,8 +165,8 @@ func (p *Processor) processExit(entry *TraceFunctionExitEntry) {
 	p.SocketManager.Broadcast(dataToSend)
 }
 
-func processPanic(entry *TraceFunctionPanicEntry) {
-	fmt.Println("got panic")
+func (p *Processor) processPanic(entry *TraceFunctionPanicEntry) {
+	p.SocketManager.Broadcast(entry)
 }
 
 func formatFuncArgsFromBuffer(buffer *[4]interface{}, funcArgs [4]uint32, valueTypes uint8) {
