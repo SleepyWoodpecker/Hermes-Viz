@@ -85,7 +85,7 @@ type TraceFunctionRestartEntry struct {
 // make another type to account for the fact that the arguments could be floats
 type FormattedTraceFunctionEnterEntry struct {
 	TraceFunctionGeneralEntry
-	ArgCount	uint8
+	ArgCount	uint8			`json:"argCount"`
     FuncArgs    [4]interface{} 	`json:"funcArgs"`
     FuncName    string			`json:"funcName"`
 }
