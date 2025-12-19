@@ -137,6 +137,7 @@ function ExecutionLogCard({ entry, seenSet }: ExecutionLogCardProps) {
         );
     } else if (entry.traceType === TraceTypes.PANIC) {
         const { timestamp, faultingPC, exceptionReason, traceId } = entry;
+        console.log(timestamp);
 
         if (!seenSet.current.has(entry.packetId)) {
             toast("Board Panic", {
@@ -225,8 +226,7 @@ function ExecutionLogCard({ entry, seenSet }: ExecutionLogCardProps) {
     return dispEl;
 }
 
-function formatNanoTo24HourLocale(nanosecondTimestamp: number) {
-    console.log("nanosecondTimestamp", nanosecondTimestamp);
+function formatNanoTo24HourLocale(nanosecondTimestamp: string) {
     const nano = BigInt(nanosecondTimestamp);
     const milliseconds = nano / BigInt(1000000);
     const dateObj = new Date(Number(milliseconds));

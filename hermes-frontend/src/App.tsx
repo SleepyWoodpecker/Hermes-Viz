@@ -1,18 +1,24 @@
 import { useEffect, useRef, useState } from "react";
 import ExecutionLog from "./components/molecules/ExecutionLog";
-import type { TrackedTraceEntry } from "./types";
+import {
+    TraceTypes,
+    type StatEntryWithoutName,
+    type TrackedTraceEntry,
+} from "./types";
 import { Toaster } from "sonner";
+import StatTable from "./components/molecules/StatTable";
 
 const webSocketUrl = "ws://localhost:8080/data";
 const MAX_EXECUTION_LOGS = 250;
-const GRAPH_BUFFER_MS = 4_000; // keep ~4s of traces for the graph
 
 // NOTE: this should have a global state that it passes to all its children
 function App() {
     const webSocketRef = useRef<WebSocket | null>(null);
     const [connected, setConnected] = useState(false);
     const [executionLogs, setExecutionLogs] = useState<TrackedTraceEntry[]>([]);
-    const [graphTraces, setGraphTraces] = useState<TrackedTraceEntry[]>([]);
+    const [stats, setStats] = useState<Map<string, StatEntryWithoutName>>(
+        new Map()
+    );
 
     useEffect(() => {
         document.documentElement.classList.add("dark");
@@ -30,34 +36,40 @@ function App() {
             };
 
             webSocketRef.current.onmessage = (e) => {
-                const now = Date.now();
-                const parsed = JSON.parse(e.data);
-                const withTimestamp: TrackedTraceEntry = {
-                    ...parsed,
-                    receivedAt: now,
-                };
+                const parsed: TrackedTraceEntry = JSON.parse(e.data);
 
-                setExecutionLogs((prevExecutionLogs) => {
-                    const nextLogs: TrackedTraceEntry[] = [
-                        withTimestamp,
-                        ...prevExecutionLogs,
-                    ];
+                if (parsed.traceType === TraceTypes.STAT_UPDATES) {
+                    const newStatMap = new Map();
 
-                    if (nextLogs.length > MAX_EXECUTION_LOGS) {
-                        nextLogs.length = MAX_EXECUTION_LOGS;
-                    }
-
-                    return nextLogs;
-                });
-
-                // Maintain a time-bounded buffer just for the execution graph.
-                setGraphTraces((prev) => {
-                    const cutoff = now - GRAPH_BUFFER_MS;
-                    const pruned = prev.filter(
-                        (entry) => entry.receivedAt >= cutoff
+                    parsed.statMap.forEach(
+                        ({
+                            funcName,
+                            callsMade,
+                            averageRunTime,
+                            maxRunTime,
+                        }) => {
+                            newStatMap.set(funcName, {
+                                callsMade,
+                                averageRunTime,
+                                maxRunTime,
+                            });
+                        }
                     );
-                    return [withTimestamp, ...pruned];
-                });
+                    setStats(newStatMap);
+                } else {
+                    setExecutionLogs((prevExecutionLogs) => {
+                        const nextLogs: TrackedTraceEntry[] = [
+                            parsed,
+                            ...prevExecutionLogs,
+                        ];
+
+                        if (nextLogs.length > MAX_EXECUTION_LOGS) {
+                            nextLogs.length = MAX_EXECUTION_LOGS;
+                        }
+
+                        return nextLogs;
+                    });
+                }
             };
         } else {
             if (webSocketRef.current) {
@@ -119,7 +131,8 @@ function App() {
                 </header>
 
                 <main className="flex-1 overflow-hidden rounded-lg border border-slate-800 bg-slate-900/60">
-                    <div className="grid h-full grid-rows-[minmax(220px,0.75fr)_minmax(0,1fr)] divide-y divide-slate-800">
+                    <div className="flex flex-col gap-4">
+                        <StatTable statMap={stats} />
                         <ExecutionLog executionLog={executionLogs} />
                     </div>
                 </main>

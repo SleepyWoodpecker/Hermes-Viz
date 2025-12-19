@@ -3,12 +3,14 @@ export enum TraceTypes {
     EXIT = 1,
     PANIC = 2,
     RESTART = 3,
+    FLAME_GRAPH_ENTRY = 4,
+    STAT_UPDATES = 5,
 }
 
 export type TraceEntryEnter = {
     traceType: TraceTypes.ENTER;
     coreId: number;
-    timestamp: number;
+    timestamp: string;
     traceId: number;
     funcCallId: number;
     argCount: number;
@@ -20,7 +22,7 @@ export type TraceEntryEnter = {
 export type TraceEntryExit = {
     traceType: TraceTypes.EXIT;
     coreId: number;
-    timestamp: number;
+    timestamp: string;
     traceId: number;
     funcCallId: number;
     returnVal: number;
@@ -31,7 +33,7 @@ export type TraceEntryExit = {
 export type TraceEntryPanic = {
     traceType: TraceTypes.PANIC;
     coreId: number;
-    timestamp: number;
+    timestamp: string;
     traceId: number;
     funcCallId: number;
     faultingPC: number;
@@ -42,22 +44,30 @@ export type TraceEntryPanic = {
 export type TraceEntryRestart = {
     traceType: TraceTypes.RESTART;
     coreId: number;
-    timestamp: number;
+    timestamp: string;
     restartReason: string;
     packetId: string;
+};
+
+export type StatEntry = {
+    callsMade: number;
+    averageRunTime: number;
+    maxRunTime: number;
+    funcName: string;
+};
+
+export type StatEntryWithoutName = Omit<StatEntry, "funcName">;
+
+export type TraceEntryStat = {
+    traceType: TraceTypes.STAT_UPDATES;
+    statMap: StatEntry[];
 };
 
 export type TraceEntry =
     | TraceEntryEnter
     | TraceEntryExit
     | TraceEntryPanic
-    | TraceEntryRestart;
+    | TraceEntryRestart
+    | TraceEntryStat;
 
-export type TrackedTraceEntry = TraceEntry & {
-    /**
-     * Wall-clock time (in ms since epoch) when this trace
-     * was received by the frontend. Used for time-windowed
-     * visualizations like the execution graph.
-     */
-    receivedAt: number;
-};
+export type TrackedTraceEntry = TraceEntry;
