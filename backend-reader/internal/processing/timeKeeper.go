@@ -17,7 +17,7 @@ func NewTimeKeeper() *TimeKeeper {
 }
 
 func (t *TimeKeeper) GetTimestampToSend(boardTime uint32) int64 {
-	expandedBoardTime := int64(boardTime) * 1000000
+	expandedBoardTime := int64(boardTime) * 1000
 	// if there has not been a global time, set that first
 	if t.BoardStartTime == 0 {	
 		// perform conversion from milliseconds into nanoseconds
