@@ -141,9 +141,11 @@ function App() {
 
                 <main className="flex-1 overflow-hidden rounded-lg border border-slate-800 bg-slate-900/60">
                     <div className="flex flex-col gap-4">
-                        {/* <StatTable statMap={stats} />
-                        <ExecutionLog executionLog={executionLogs} /> */}
                         <ExecutionFlameGraph traces={flameGraphLogs} />
+                        <div className="grid grid-cols-2 gap-4">
+                            <StatTable statMap={stats} />
+                            <ExecutionLog executionLog={executionLogs} />
+                        </div>
                     </div>
                 </main>
             </div>
