@@ -7,13 +7,13 @@ interface StatTableProps {
     statMap: Map<string, StatEntryWithoutName>;
 }
 
-function formatDurationNs(ns: number): string {
-    if (!Number.isFinite(ns) || ns < 0) return "-";
+function formatDurationNs(micros: number): string {
+    if (!Number.isFinite(micros) || micros < 0) return "-";
 
     // Treat incoming values as nanoseconds and scale to human-friendly units
-    const micro = ns / 1_000;
-    const milli = ns / 1_000_000;
-    const seconds = ns / 1_000_000_000;
+    const micro = micros;
+    const milli = micros / 1_000;
+    const seconds = micros / 1_000_000;
 
     if (seconds >= 1) {
         return `${seconds.toFixed(2)} s`;
@@ -21,11 +21,7 @@ function formatDurationNs(ns: number): string {
     if (milli >= 1) {
         return `${milli.toFixed(2)} ms`;
     }
-    if (micro >= 1) {
-        return `${micro.toFixed(2)} µs`;
-    }
-
-    return `${ns} ns`;
+    return `${micro.toFixed(2)} µs`;
 }
 
 export default function StatTable({ statMap }: StatTableProps) {

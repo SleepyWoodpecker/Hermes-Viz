@@ -31,10 +31,10 @@ func (s *StatTracker) AddStats(entry *FormattedCompletedFunctionCall) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// record funcRunTime in milliseconds
+	// record funcRunTime in microseconds
 	endTime, _ := strconv.ParseInt(entry.EndTime, 10, 64)
 	startTime, _ := strconv.ParseInt(entry.StartTime, 10, 64)
-	funcRunTime := (endTime - startTime) / 1_000
+	funcRunTime := (endTime - startTime)
 	
 	if record, ok := s.StatMap[entry.FuncName]; ok {
 		record.AverageRunTime = record.AverageRunTime * float64(record.CallsMade) + float64(funcRunTime)
