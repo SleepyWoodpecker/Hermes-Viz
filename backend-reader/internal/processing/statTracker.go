@@ -1,6 +1,7 @@
 package processing
 
 import (
+	"strconv"
 	"sync"
 )
 
@@ -31,7 +32,9 @@ func (s *StatTracker) AddStats(entry *FormattedCompletedFunctionCall) {
 	defer s.mu.Unlock()
 
 	// record funcRunTime in milliseconds
-	funcRunTime := (entry.EndTime - entry.StartTime) / 1_000
+	endTime, _ := strconv.ParseInt(entry.EndTime, 10, 64)
+	startTime, _ := strconv.ParseInt(entry.StartTime, 10, 64)
+	funcRunTime := (endTime - startTime) / 1_000
 	
 	if record, ok := s.StatMap[entry.FuncName]; ok {
 		record.AverageRunTime = record.AverageRunTime * float64(record.CallsMade) + float64(funcRunTime)

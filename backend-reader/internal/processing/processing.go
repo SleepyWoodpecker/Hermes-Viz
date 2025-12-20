@@ -135,8 +135,13 @@ type FormattedCompletedFunctionCall struct {
     FuncName    string				`json:"funcName"`
 	ReturnVal   interface{}		 	`json:"returnVal"`
 	PacketId	string				`json:"packetId"`
-	StartTime	int64				`json:"startTime"`
-	EndTime		int64				`json:"endTime"`
+	StartTime	string				`json:"startTime"`
+	EndTime		string				`json:"endTime"`
+	Depth		uint32				`json:"depth"`
+
+	// track nested function calls
+	ParentFunctionId	uint32		`json:"parentFunctionId"` // NOTE: 0 can never be the parent function ID, since 0 itself is always the first function call (assuming function calls dont wrap around)
+	ChildFunctionIds	[]uint32	`json:"childFunctionIds"`
 }
 
 type StatPacket struct {
@@ -145,12 +150,14 @@ type StatPacket struct {
 }
 
 type Processor struct {
-	MessageQueue <-chan [RAW_PACKET_SIZE]byte
-	PortName 	string
-	SocketManager *SocketManager
-	timeKeeper	*TimeKeeper
-	activeFuncionCalls	map[uint32]FormattedCompletedFunctionCall
-	statTracker *StatTracker
+	MessageQueue 			<-chan [RAW_PACKET_SIZE]byte
+	PortName 				string
+	SocketManager 			*SocketManager
+	timeKeeper				*TimeKeeper
+	activeFuncionCalls		map[uint32]*FormattedCompletedFunctionCall
+	statTracker 			*StatTracker
+
+	funcCallStack			[]uint32
 }
 
 func NewProcessor(portname string, messageQueue <-chan [RAW_PACKET_SIZE]byte, sm *SocketManager) *Processor {
@@ -159,8 +166,9 @@ func NewProcessor(portname string, messageQueue <-chan [RAW_PACKET_SIZE]byte, sm
 		PortName: portname,
 		SocketManager: sm,
 		timeKeeper: NewTimeKeeper(),
-		activeFuncionCalls: make(map[uint32]FormattedCompletedFunctionCall),
+		activeFuncionCalls: make(map[uint32]*FormattedCompletedFunctionCall),
 		statTracker: NewStatTracker(),
+		funcCallStack: make([]uint32, 0),
 	}
 }
 
@@ -256,11 +264,21 @@ func (p *Processor) processEntry(entry *TraceFunctionEnterEntry) {
 
 	p.SocketManager.Broadcast(dataToSend)
 
-	p.activeFuncionCalls[entry.FuncNumId] = FormattedCompletedFunctionCall{
+	/*
+	Each layer of nested function calls should be represented as an array
+
+	The representation of function calls should look like a tree, where each node has at most one parent, but possibly multiple children
+	When rendering this tree later, the data should be displayed in a depth first manner
+
+	Think about:
+	1. Functions that nest multiple calls (call multiple sub functions within the same function)
+	2. Functions that are recursively deep (probably some fibonacci function)
+	*/
+	formattedFuncEntry := FormattedCompletedFunctionCall{
 		FormattedTraceFunctionGeneralEntry: FormattedTraceFunctionGeneralEntry{
 			TraceType: FLAME_GRAPH_ENTRY,
 			CoreId: entry.CoreId,
-			Timestamp: strconv.FormatInt(time.Now().UnixNano(), 10), // NOTE: not sure if this is the best idea for now
+			Timestamp: strconv.FormatInt(time.Now().UnixMicro(), 10), // NOTE: not sure if this is the best idea for now
 			TraceId: entry.TraceId,
 			FuncNumId: entry.FuncNumId,
 		},
@@ -268,8 +286,22 @@ func (p *Processor) processEntry(entry *TraceFunctionEnterEntry) {
 		FuncArgs: buffer,
 		FuncName: string(entry.FuncName[:]),
 		PacketId: xid.New().String(),
-		StartTime: funcStartTime,
+		StartTime: strconv.FormatInt(funcStartTime, 10),
+		ChildFunctionIds: nil,
+		Depth: uint32(len(p.funcCallStack)) + 1,
 	}
+
+	if len(p.funcCallStack) != 0 {
+		// if there are currently entries on the function call stack, populate the child fields with that information
+		formattedFuncEntry.ParentFunctionId = p.funcCallStack[len(p.funcCallStack) - 1]
+		p.activeFuncionCalls[formattedFuncEntry.ParentFunctionId].ChildFunctionIds = append(p.activeFuncionCalls[formattedFuncEntry.ParentFunctionId].ChildFunctionIds, entry.FuncNumId)
+	} else {
+		formattedFuncEntry.ParentFunctionId = 0
+	}
+
+	p.funcCallStack = append(p.funcCallStack, entry.FuncNumId)
+
+	p.activeFuncionCalls[entry.FuncNumId] = &formattedFuncEntry
 }
 
 func (p *Processor) processExit(entry *TraceFunctionExitEntry) {
@@ -292,10 +324,16 @@ func (p *Processor) processExit(entry *TraceFunctionExitEntry) {
 
 	if record, ok := p.activeFuncionCalls[entry.FuncNumId]; ok {
 		record.ReturnVal = formattedReturnVal
-		record.EndTime = funcEndTime
+		record.EndTime = strconv.FormatInt(funcEndTime, 10)
 		p.SocketManager.Broadcast(record)
 
-		p.statTracker.AddStats(&record)
+		p.statTracker.AddStats(record)
+
+		if p.funcCallStack[len(p.activeFuncionCalls) - 1] != entry.FuncNumId {
+			panic("Last active function call is not the same as current active function call")
+		}
+		// pop the last entry
+		p.funcCallStack = p.funcCallStack[:len(p.activeFuncionCalls) - 1]
 
 		delete(p.activeFuncionCalls, entry.FuncNumId)
 	}

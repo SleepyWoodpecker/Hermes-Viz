@@ -63,11 +63,31 @@ export type TraceEntryStat = {
     statMap: StatEntry[];
 };
 
+// NOTE: when rendering stuff with timestamps, render it relative time, so that you can hold on to the precision that the microsecond timestamps offer
+export type TraceEntryCallStack = {
+    traceType: TraceTypes.FLAME_GRAPH_ENTRY;
+    coreId: number;
+    timestamp: string;
+    traceId: number;
+    depth: number;
+    funcCallId: number;
+    argCount: number;
+    funcArgs: number[];
+    funcName: string;
+    returnVal: number;
+    packetId: string;
+    startTime: string;
+    endTime: string;
+    parentFunctionId: number;
+    childFunctionIds: number[];
+};
+
 export type TraceEntry =
     | TraceEntryEnter
     | TraceEntryExit
     | TraceEntryPanic
     | TraceEntryRestart
+    | TraceEntryCallStack
     | TraceEntryStat;
 
 export type TrackedTraceEntry = TraceEntry;

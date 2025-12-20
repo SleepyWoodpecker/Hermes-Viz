@@ -11,16 +11,16 @@ type TimeKeeper struct {
 
 func NewTimeKeeper() *TimeKeeper {
 	return &TimeKeeper{
-		ProgStartTime: time.Now().UnixNano(),
+		ProgStartTime: time.Now().UnixMicro(),
 		BoardStartTime: 0,
 	}
 }
 
 func (t *TimeKeeper) GetTimestampToSend(boardTime uint32) int64 {
-	expandedBoardTime := int64(boardTime) * 1000
+	expandedBoardTime := int64(boardTime)
 	// if there has not been a global time, set that first
 	if t.BoardStartTime == 0 {	
-		// perform conversion from milliseconds into nanoseconds
+		// perform conversion from milliseconds into microseconds
 		t.BoardStartTime = expandedBoardTime
 	}
 
@@ -29,5 +29,5 @@ func (t *TimeKeeper) GetTimestampToSend(boardTime uint32) int64 {
 
 func (t *TimeKeeper) HandleBoardReset() {
 	t.BoardStartTime = 0
-	t.ProgStartTime = time.Now().UnixNano()
+	t.ProgStartTime = time.Now().UnixMicro()
 }

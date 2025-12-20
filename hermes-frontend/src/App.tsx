@@ -3,10 +3,12 @@ import ExecutionLog from "./components/molecules/ExecutionLog";
 import {
     TraceTypes,
     type StatEntryWithoutName,
+    type TraceEntryCallStack,
     type TrackedTraceEntry,
 } from "./types";
 import { Toaster } from "sonner";
 import StatTable from "./components/molecules/StatTable";
+import ExecutionFlameGraph from "./components/molecules/FlameGraph";
 
 const webSocketUrl = "ws://localhost:8080/data";
 const MAX_EXECUTION_LOGS = 250;
@@ -18,6 +20,9 @@ function App() {
     const [executionLogs, setExecutionLogs] = useState<TrackedTraceEntry[]>([]);
     const [stats, setStats] = useState<Map<string, StatEntryWithoutName>>(
         new Map()
+    );
+    const [flameGraphLogs, setFlameGraphLogs] = useState<TraceEntryCallStack[]>(
+        []
     );
 
     useEffect(() => {
@@ -56,6 +61,10 @@ function App() {
                         }
                     );
                     setStats(newStatMap);
+                } else if (parsed.traceType === TraceTypes.FLAME_GRAPH_ENTRY) {
+                    setFlameGraphLogs((logs) => {
+                        return [...logs, parsed];
+                    });
                 } else {
                     setExecutionLogs((prevExecutionLogs) => {
                         const nextLogs: TrackedTraceEntry[] = [
@@ -132,8 +141,9 @@ function App() {
 
                 <main className="flex-1 overflow-hidden rounded-lg border border-slate-800 bg-slate-900/60">
                     <div className="flex flex-col gap-4">
-                        <StatTable statMap={stats} />
-                        <ExecutionLog executionLog={executionLogs} />
+                        {/* <StatTable statMap={stats} />
+                        <ExecutionLog executionLog={executionLogs} /> */}
+                        <ExecutionFlameGraph traces={flameGraphLogs} />
                     </div>
                 </main>
             </div>
