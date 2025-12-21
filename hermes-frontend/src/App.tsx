@@ -12,6 +12,7 @@ import ExecutionFlameGraph from "./components/molecules/FlameGraph";
 
 const webSocketUrl = "ws://localhost:8080/data";
 const MAX_EXECUTION_LOGS = 250;
+const MAX_FLAME_GRAPH_LOGS = 100_000;
 
 // NOTE: this should have a global state that it passes to all its children
 function App() {
@@ -63,7 +64,17 @@ function App() {
                     setStats(newStatMap);
                 } else if (parsed.traceType === TraceTypes.FLAME_GRAPH_ENTRY) {
                     setFlameGraphLogs((logs) => {
-                        return [...logs, parsed];
+                        const newLogs = [...logs, parsed];
+
+                        if (newLogs.length > MAX_FLAME_GRAPH_LOGS) {
+                            const lastElIndex = newLogs.length - 1;
+                            return newLogs.slice(
+                                lastElIndex - MAX_FLAME_GRAPH_LOGS,
+                                lastElIndex
+                            );
+                        }
+
+                        return newLogs;
                     });
                 } else {
                     setExecutionLogs((prevExecutionLogs) => {
@@ -141,7 +152,10 @@ function App() {
 
                 <main className="flex-1 overflow-hidden rounded-lg border border-slate-800 bg-slate-900/60">
                     <div className="flex flex-col gap-4">
-                        <ExecutionFlameGraph traces={flameGraphLogs} />
+                        <ExecutionFlameGraph
+                            traces={flameGraphLogs}
+                            connected={connected}
+                        />
                         <div className="grid grid-cols-2 gap-4">
                             <StatTable statMap={stats} />
                             <ExecutionLog executionLog={executionLogs} />

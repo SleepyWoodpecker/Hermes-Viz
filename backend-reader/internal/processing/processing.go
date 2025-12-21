@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -330,7 +331,9 @@ func (p *Processor) processExit(entry *TraceFunctionExitEntry) {
 		p.statTracker.AddStats(record)
 
 		if p.funcCallStack[len(p.activeFuncionCalls) - 1] != entry.FuncNumId {
-			panic("Last active function call is not the same as current active function call")
+			// TODO: this is likely an error with the baudrate not being able to keep up with the data rate
+			// I do think that trying to use WiFi might help
+			fmt.Fprintf(os.Stderr, "Last active function call is not the same as current active function call")
 		}
 		// pop the last entry
 		p.funcCallStack = p.funcCallStack[:len(p.activeFuncionCalls) - 1]

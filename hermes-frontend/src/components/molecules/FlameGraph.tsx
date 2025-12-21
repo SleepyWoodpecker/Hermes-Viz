@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { TraceEntryCallStack } from "../../types";
 import { getColor } from "../../util";
 
 interface ExecutionFlameGraphProps {
     traces: TraceEntryCallStack[];
+    connected: boolean;
 }
 
 const ROW_HEIGHT = 40;
@@ -13,6 +14,7 @@ const AXIS_HEIGHT = 30;
 
 export default function ExecutionFlameGraph({
     traces,
+    connected,
 }: ExecutionFlameGraphProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -25,6 +27,10 @@ export default function ExecutionFlameGraph({
     const traceStartTimeRef = useRef<bigint | undefined>(undefined);
     const dimensionsRef = useRef({ width: 0, height: 0 });
     const recordStartTimeRef = useRef<number>(Date.now());
+
+    // animation frameIds -- used to pause progress if disconnected
+    const timerAnimationRef = useRef<number | null>(null);
+    const flameGraphAnimationRef = useRef<number | null>(null);
 
     // 1. Sync Data
     useEffect(() => {
@@ -66,12 +72,18 @@ export default function ExecutionFlameGraph({
     // LOOP 1: THE UI LOOP (Timer Only)
     // =========================================================
     useEffect(() => {
+        if (!connected) {
+            if (timerAnimationRef.current) {
+                cancelAnimationFrame(timerAnimationRef.current);
+                timerAnimationRef.current = null;
+            }
+            return;
+        }
+
         const canvas = uiCanvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
-
-        let frameId: number;
 
         const renderUI = () => {
             const { width, height } = dimensionsRef.current;
@@ -94,23 +106,34 @@ export default function ExecutionFlameGraph({
             }
             ctx.restore();
 
-            frameId = requestAnimationFrame(renderUI);
+            timerAnimationRef.current = requestAnimationFrame(renderUI);
         };
 
         renderUI();
-        return () => cancelAnimationFrame(frameId);
-    }, []); // Empty dependency array -> Runs forever, independently
+        return () => {
+            if (timerAnimationRef.current) {
+                cancelAnimationFrame(timerAnimationRef.current!);
+                timerAnimationRef.current = null;
+            }
+        };
+    }, [connected]);
 
     // =========================================================
     // LOOP 2: THE GRAPH LOOP (Heavy Data Visualization)
     // =========================================================
     useEffect(() => {
+        if (!connected) {
+            if (flameGraphAnimationRef.current) {
+                cancelAnimationFrame(flameGraphAnimationRef.current);
+                timerAnimationRef.current = null;
+            }
+            return;
+        }
+
         const canvas = graphCanvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext("2d", { alpha: false });
         if (!ctx) return;
-
-        let frameId: number;
 
         const renderGraph = () => {
             const traces = latestTracesRef.current;
@@ -118,7 +141,8 @@ export default function ExecutionFlameGraph({
 
             // Guard: If hidden or empty, just wait
             if (width === 0 || height === 0 || traces.length === 0) {
-                frameId = requestAnimationFrame(renderGraph);
+                flameGraphAnimationRef.current =
+                    requestAnimationFrame(renderGraph);
                 return;
             }
 
@@ -231,12 +255,17 @@ export default function ExecutionFlameGraph({
             }
             ctx.restore();
 
-            frameId = requestAnimationFrame(renderGraph);
+            flameGraphAnimationRef.current = requestAnimationFrame(renderGraph);
         };
 
         renderGraph();
-        return () => cancelAnimationFrame(frameId);
-    }, []);
+        return () => {
+            if (flameGraphAnimationRef.current) {
+                cancelAnimationFrame(flameGraphAnimationRef.current);
+                flameGraphAnimationRef.current = null;
+            }
+        };
+    }, [connected]);
 
     return (
         <div
