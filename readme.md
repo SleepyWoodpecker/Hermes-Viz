@@ -1,8 +1,5 @@
 # Frosted Glass, a visualization tool for ESP32s
 
-![Hermes demo](./assets/hermes-demo.png)
-
-## Demo video
 [https://github.com/user-attachments/assets/16b3f578-fc46-4af7-a5bc-4d595099d930](https://github.com/user-attachments/assets/16b3f578-fc46-4af7-a5bc-4d595099d930)
 
 Michael said that microcontrollers are like black boxes, so this is an attempt to give us a better glimpse of what is going on inside them. This doesn't tell the full story, but still gives us better ideas of what is going on, kind of like a frosted glass box, which is still a one up on a black box.
