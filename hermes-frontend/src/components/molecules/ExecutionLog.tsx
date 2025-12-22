@@ -98,7 +98,7 @@ function ExecutionLogCard({ entry, seenSet }: ExecutionLogCardProps) {
                         Core: {coreId}
                     </div>
                     <div className="text-sm text-muted-foreground">
-                        {formatNanoTo24HourLocale(timestamp)}
+                        {formatMicroTo24HourLocale(timestamp)}
                     </div>
                 </div>
             </div>
@@ -135,7 +135,7 @@ function ExecutionLogCard({ entry, seenSet }: ExecutionLogCardProps) {
                         Core: {coreId}
                     </div>
                     <div className="text-sm text-muted-foreground">
-                        {formatNanoTo24HourLocale(timestamp)}
+                        {formatMicroTo24HourLocale(timestamp)}
                     </div>
                 </div>
             </div>
@@ -173,7 +173,7 @@ function ExecutionLogCard({ entry, seenSet }: ExecutionLogCardProps) {
                         Core: {coreId}
                     </div>
                     <div className="text-sm text-muted-foreground">
-                        {formatNanoTo24HourLocale(timestamp)}
+                        {formatMicroTo24HourLocale(timestamp)}
                     </div>
                 </div>
             </div>
@@ -184,9 +184,9 @@ function ExecutionLogCard({ entry, seenSet }: ExecutionLogCardProps) {
     return dispEl;
 }
 
-function formatNanoTo24HourLocale(nanosecondTimestamp: string) {
+function formatMicroTo24HourLocale(nanosecondTimestamp: string) {
     const nano = BigInt(nanosecondTimestamp);
-    const milliseconds = nano / BigInt(1000000);
+    const milliseconds = nano / BigInt(1000);
     const dateObj = new Date(Number(milliseconds));
 
     // Use 'en-GB' locale which defaults to 24-hour time (e.g., 14:00:00)
