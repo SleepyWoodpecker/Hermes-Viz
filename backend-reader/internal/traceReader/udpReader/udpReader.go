@@ -42,8 +42,6 @@ func (u *UDPReader) ReadPacket() error {
 		// should be alright to do this style of read since the connection should have its own receive buffer
 		n, _, err := u.UDPConn.ReadFromUDP(buffer[count : ])
 
-		fmt.Println(buffer)
-
 		if err != nil {
 			return err
 		}

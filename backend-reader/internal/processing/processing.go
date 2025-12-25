@@ -287,6 +287,8 @@ func (p *Processor) processEntry(entry *TraceFunctionEnterEntry) {
 		callStackToUse = &p.core1FuncCallStack
 	}
 
+	fmt.Println(callStackToUse)
+
 
 	formattedFuncEntry := FormattedCompletedFunctionCall{
 		FormattedTraceFunctionGeneralEntry: FormattedTraceFunctionGeneralEntry{
@@ -391,6 +393,10 @@ func (p *Processor) processRestart(entry *TraceFunctionRestartEntry) {
 		Timestamp: strconv.FormatInt(p.timeKeeper.GetTimestampToSend(entry.Timestamp), 10),
 	}
 	p.SocketManager.Broadcast(dataToSend)
+
+	p.activeFuncionCalls = make(map[uint32]*FormattedCompletedFunctionCall)
+	p.core0FuncCallStack = make([]uint32, 0)
+	p.core1FuncCallStack = make([]uint32, 0)
 }
 
 func formatFuncArgsFromBuffer(buffer *[4]interface{}, funcArgs [4]uint32, valueTypes uint8) {
