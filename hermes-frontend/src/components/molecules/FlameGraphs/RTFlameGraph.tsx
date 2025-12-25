@@ -13,8 +13,6 @@ interface ExecutionFlameGraphProps {
     connected: boolean;
 }
 
-const ROW_HEIGHT = 40;
-const Y_OFFSET = 20;
 const GAP_THRESHOLD_MULTIPLIER = 5;
 const AXIS_HEIGHT = 30;
 // Reserve left area for core label and other UI
@@ -42,6 +40,8 @@ export default function RTExecutionFlameGraph({
     const flameGraphAnimationRef = useRef<number | null>(null);
     const coreLabelAnimationRef = useRef<number | null>(null);
 
+    const coreNumbersPresent = useRef<number[]>([]);
+
     // hover map
     const drawnShapeMap = useRef<Map<string, TraceEntryCallStack>>(new Map());
     const [inspectedFunction, setInspectedFunction] =
@@ -54,8 +54,16 @@ export default function RTExecutionFlameGraph({
             let min = BigInt(traces[0].startTime);
             traces.forEach((t) => {
                 if (BigInt(t.startTime) < min) min = BigInt(t.startTime);
+                console.log(t.coreId);
             });
             traceStartTimeRef.current = min;
+        }
+        if (traces.length > 0) {
+            const coreNumberSet: Set<number> = new Set();
+            traces.forEach((t) => coreNumberSet.add(t.coreId));
+            coreNumbersPresent.current = Array.from(coreNumberSet).sort(
+                (a, b) => a - b
+            );
         }
     }, [traces]);
 
@@ -150,10 +158,19 @@ export default function RTExecutionFlameGraph({
     }, [connected]);
 
     useEffect(() => {
+        if (!connected) {
+            if (coreLabelAnimationRef.current)
+                cancelAnimationFrame(coreLabelAnimationRef.current);
+            return;
+        }
+
         const canvas = coreLabelCanvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
+
+        const ROW_HEIGHT = coreNumbersPresent.current.length === 2 ? 20 : 40;
+        const Y_OFFSET = ROW_HEIGHT;
 
         const renderUI = () => {
             const { width, height } = dimensionsRef.current;
@@ -168,13 +185,33 @@ export default function RTExecutionFlameGraph({
             // All subsequent drawing commands will now use Logical Pixels
             ctx.scale(dpr, dpr);
 
-            ctx.save();
-            ctx.fillStyle = "#ffffff";
-            ctx.font = "bold 10px monospace";
-            ctx.textAlign = "left";
-            ctx.textBaseline = "top";
-            ctx.fillText("Core 1", 5, height / 2);
-            ctx.restore();
+            if (coreNumbersPresent.current.length === 2) {
+                ctx.save();
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "bold 10px monospace";
+                ctx.textAlign = "left";
+                ctx.textBaseline = "top";
+                ctx.fillText("Core 0", 5, Y_OFFSET + ROW_HEIGHT);
+                ctx.fillText("Core 1", 5, Y_OFFSET + ROW_HEIGHT + height / 2);
+
+                ctx.fillStyle = "#808080";
+                ctx.fillRect(15, height / 2, width, 1);
+
+                ctx.restore();
+            } else if (coreNumbersPresent.current.length === 1) {
+                ctx.save();
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "bold 10px monospace";
+                ctx.textAlign = "left";
+                ctx.textBaseline = "top";
+                ctx.fillText(
+                    `Core ${coreNumbersPresent.current[0]}`,
+                    5,
+                    Y_OFFSET + ROW_HEIGHT
+                );
+
+                ctx.restore();
+            }
 
             coreLabelAnimationRef.current = requestAnimationFrame(renderUI);
         };
@@ -272,6 +309,10 @@ export default function RTExecutionFlameGraph({
 
             // 5. Render Bars
             const renderMap = new Map();
+            const ROW_HEIGHT =
+                coreNumbersPresent.current.length === 2 ? 20 : 40;
+            const Y_OFFSET = ROW_HEIGHT;
+
             visibleTraces.forEach((rect) => {
                 const rectStart = Number(BigInt(rect.startTime) - renderStart);
                 const rectEnd = Number(BigInt(rect.endTime) - renderStart);
@@ -280,9 +321,16 @@ export default function RTExecutionFlameGraph({
 
                 const x = CORE_LABEL_MARGIN + rectStart * xDiv;
                 const w = Math.max((rectEnd - rectStart) * xDiv, 1);
-                // Cull shapes that fall fully left of the margin or fully off the right edge
                 if (x + w < CORE_LABEL_MARGIN || x > width) return;
-                const y = Y_OFFSET + rect.depth * ROW_HEIGHT;
+
+                let y = Y_OFFSET + (rect.depth - 1) * ROW_HEIGHT;
+                if (
+                    coreNumbersPresent.current.length === 2 &&
+                    rect.coreId === 1
+                ) {
+                    console.log("HELLO");
+                    y += height / 2;
+                }
 
                 ctx.fillStyle = getColor(rect.funcName, rect.depth);
                 ctx.fillRect(x, y, w, ROW_HEIGHT - 2);
