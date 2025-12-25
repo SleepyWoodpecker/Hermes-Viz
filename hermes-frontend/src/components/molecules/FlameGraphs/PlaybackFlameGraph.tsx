@@ -1,4 +1,5 @@
 import {
+    useCallback,
     useEffect,
     useMemo,
     useRef,
@@ -11,23 +12,26 @@ import Tooltip from "../../atoms/Tooltip";
 
 interface PlaybackFlameGraphProps {
     traces: TraceEntryCallStack[];
+    selectedOption?: "Core 0" | "Core 1" | "Both";
 }
 
-const ROW_HEIGHT = 40;
+const ROW_HEIGHT_BASE = 40;
 const Y_OFFSET = 20;
-
+const CORE_LABEL_MARGIN = 40;
 const MIN_ZOOM = 0.00001;
 const MAX_ZOOM = 100;
-const ZOOM_FACTOR = 1.75;
 
 export default function PlaybackFlameGraph({
     traces,
+    selectedOption = "Both",
 }: PlaybackFlameGraphProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
     const [inspectedFunction, setInspectedFunction] =
         useState<TraceEntryCallStack | null>(null);
+
+    const coreNumbersPresent = useRef<number[]>([]);
 
     const viewState = useRef({
         offsetTime: 0n,
@@ -41,10 +45,21 @@ export default function PlaybackFlameGraph({
     const bounds = useMemo(() => {
         if (traces.length === 0) return { start: 0n, end: 0n, duration: 0n };
 
-        let min = BigInt(traces[0].startTime);
-        let max = BigInt(traces[0].endTime);
+        // Filter traces based on selected option
+        let filteredTraces = traces;
+        if (selectedOption === "Core 0") {
+            filteredTraces = traces.filter((t) => t.coreId === 0);
+        } else if (selectedOption === "Core 1") {
+            filteredTraces = traces.filter((t) => t.coreId === 1);
+        }
 
-        traces.forEach((t) => {
+        if (filteredTraces.length === 0)
+            return { start: 0n, end: 0n, duration: 0n };
+
+        let min = BigInt(filteredTraces[0].startTime);
+        let max = BigInt(filteredTraces[0].endTime);
+
+        filteredTraces.forEach((t) => {
             const s = BigInt(t.startTime);
             const e = BigInt(t.endTime);
             if (s < min) min = s;
@@ -52,21 +67,27 @@ export default function PlaybackFlameGraph({
         });
 
         return { start: min, end: max, duration: max - min };
-    }, [traces]);
+    }, [traces, selectedOption]);
 
+    // Update coreNumbersPresent based on selected option
     useEffect(() => {
-        if (bounds.duration > 0n && containerRef.current) {
-            const width = containerRef.current.clientWidth;
-            const initialZoom = width / Number(bounds.duration);
-            viewState.current.zoom = initialZoom * 0.95;
-            viewState.current.offsetTime =
-                bounds.start -
-                BigInt(Math.floor(Number(bounds.duration) * 0.025));
-            draw();
+        let filteredTraces = traces;
+        if (selectedOption === "Core 0") {
+            filteredTraces = traces.filter((t) => t.coreId === 0);
+        } else if (selectedOption === "Core 1") {
+            filteredTraces = traces.filter((t) => t.coreId === 1);
         }
-    }, [bounds]);
 
-    const draw = () => {
+        if (filteredTraces.length > 0) {
+            const coreNumberSet: Set<number> = new Set();
+            filteredTraces.forEach((t) => coreNumberSet.add(t.coreId));
+            coreNumbersPresent.current = Array.from(coreNumberSet).sort(
+                (a, b) => a - b
+            );
+        }
+    }, [traces, selectedOption]);
+
+    const draw = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas || !containerRef.current) return;
 
@@ -90,7 +111,15 @@ export default function PlaybackFlameGraph({
         ctx.fillStyle = "#1e1e1e";
         ctx.fillRect(0, 0, width, height);
 
-        if (traces.length === 0) {
+        // Filter traces based on selected option
+        let tracesToRender = traces;
+        if (selectedOption === "Core 0") {
+            tracesToRender = traces.filter((t) => t.coreId === 0);
+        } else if (selectedOption === "Core 1") {
+            tracesToRender = traces.filter((t) => t.coreId === 1);
+        }
+
+        if (tracesToRender.length === 0) {
             ctx.fillStyle = "#666";
             ctx.font = "14px sans-serif";
             ctx.textAlign = "center";
@@ -104,17 +133,30 @@ export default function PlaybackFlameGraph({
         const visibleStartTime = offsetTime;
         const visibleEndTime = offsetTime + BigInt(Math.floor(width / zoom));
 
-        traces.forEach((trace) => {
+        // Determine ROW_HEIGHT based on number of cores visible
+        const ROW_HEIGHT =
+            coreNumbersPresent.current.length === 2 && selectedOption === "Both"
+                ? 20
+                : ROW_HEIGHT_BASE;
+
+        tracesToRender.forEach((trace) => {
             const start = BigInt(trace.startTime);
             const end = BigInt(trace.endTime);
 
             if (end < visibleStartTime || start > visibleEndTime) return;
 
-            const x = Number(start - offsetTime) * zoom;
+            const x = CORE_LABEL_MARGIN + Number(start - offsetTime) * zoom;
             const w = Math.max(Number(end - start) * zoom, 1);
 
-            // CHANGED: Removed Y_OFFSET so traces start at the top
-            const y = trace.depth * ROW_HEIGHT;
+            // Calculate y position based on depth and core
+            let y = trace.depth * ROW_HEIGHT;
+            if (
+                coreNumbersPresent.current.length === 2 &&
+                selectedOption === "Both" &&
+                trace.coreId === 1
+            ) {
+                y += height / 2;
+            }
 
             if (w < 0.2) return;
 
@@ -124,7 +166,7 @@ export default function PlaybackFlameGraph({
             renderMap.set(`${x},${y},${x + w},${y + ROW_HEIGHT - 2}`, trace);
 
             if (w > 40) {
-                const cleanName = trace.funcName.replace(/\u0000/g, "");
+                const cleanName = trace.funcName.split("\0").join("");
                 ctx.fillStyle = "#000";
                 ctx.font = "10px monospace";
                 ctx.textBaseline = "middle";
@@ -141,7 +183,52 @@ export default function PlaybackFlameGraph({
 
         // We draw the axis last so it floats on top of deep traces
         drawAxis(ctx, width, height, offsetTime, zoom, bounds.start);
-    };
+
+        // Draw core labels if both cores are shown
+        if (
+            coreNumbersPresent.current.length === 2 &&
+            selectedOption === "Both"
+        ) {
+            ctx.save();
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 10px monospace";
+            ctx.textAlign = "left";
+            ctx.textBaseline = "top";
+            ctx.fillText("Core 0", 5, ROW_HEIGHT + Y_OFFSET);
+            ctx.fillText("Core 1", 5, height / 2 + ROW_HEIGHT + Y_OFFSET);
+
+            ctx.fillStyle = "#808080";
+            ctx.fillRect(0, height / 2, width, 1);
+
+            ctx.restore();
+        } else if (coreNumbersPresent.current.length === 1) {
+            ctx.save();
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 10px monospace";
+            ctx.textAlign = "left";
+            ctx.textBaseline = "top";
+            ctx.fillText(
+                `Core ${coreNumbersPresent.current[0]}`,
+                5,
+                ROW_HEIGHT + Y_OFFSET
+            );
+
+            ctx.restore();
+        }
+    }, [traces, selectedOption, bounds.start]);
+
+    // Initialize zoom and offset when bounds change
+    useEffect(() => {
+        if (bounds.duration > 0n && containerRef.current) {
+            const width = containerRef.current.clientWidth;
+            const initialZoom = width / Number(bounds.duration);
+            viewState.current.zoom = initialZoom * 0.95;
+            viewState.current.offsetTime =
+                bounds.start -
+                BigInt(Math.floor(Number(bounds.duration) * 0.025));
+            draw();
+        }
+    }, [bounds, draw]);
 
     const drawAxis = (
         ctx: CanvasRenderingContext2D,
@@ -152,18 +239,19 @@ export default function PlaybackFlameGraph({
         globalStart: bigint // <--- New Argument
     ) => {
         const topOfAxis = height - Y_OFFSET;
+        const useableWidth = width - CORE_LABEL_MARGIN;
 
         ctx.save();
 
         // Background
         ctx.fillStyle = "#1e1e1e";
-        ctx.fillRect(0, topOfAxis, width, Y_OFFSET);
+        ctx.fillRect(CORE_LABEL_MARGIN, topOfAxis, useableWidth, Y_OFFSET);
 
         // Top Border
         ctx.strokeStyle = "#444";
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(0, topOfAxis);
+        ctx.moveTo(CORE_LABEL_MARGIN, topOfAxis);
         ctx.lineTo(width, topOfAxis);
         ctx.stroke();
 
@@ -172,7 +260,7 @@ export default function PlaybackFlameGraph({
         ctx.textBaseline = "middle";
 
         for (let i = 0; i <= NUM_TICKS; i++) {
-            const x = (width / NUM_TICKS) * i;
+            const x = (useableWidth / NUM_TICKS) * i;
 
             // Calculate absolute time at this X position
             const timeAtX = offsetTime + BigInt(Math.floor(x / zoom));
@@ -184,12 +272,11 @@ export default function PlaybackFlameGraph({
             // Convert to seconds (assuming microseconds input)
             const seconds = Number(relativeTime) / 1_000_000;
 
-            // Format: "0.00s", "+1.50s", "-0.20s"
             const label = `${seconds >= 0 ? "+" : ""}${seconds.toFixed(4)}s`;
 
             // Draw Tick
             ctx.fillStyle = "#555";
-            ctx.fillRect(x, topOfAxis, 1, 5);
+            ctx.fillRect(x + CORE_LABEL_MARGIN, topOfAxis, 1, 5);
 
             // Draw Label
             ctx.fillStyle = "#aaa";
@@ -197,7 +284,11 @@ export default function PlaybackFlameGraph({
             else if (i === NUM_TICKS) ctx.textAlign = "right";
             else ctx.textAlign = "center";
 
-            ctx.fillText(label, x, topOfAxis + Y_OFFSET / 2);
+            ctx.fillText(
+                label,
+                x + CORE_LABEL_MARGIN,
+                topOfAxis + Y_OFFSET / 2
+            );
         }
         ctx.restore();
     };
@@ -228,6 +319,14 @@ export default function PlaybackFlameGraph({
                 )
             )
                 return;
+
+            // Filter traces for Q/E navigation
+            let tracesToNavigate = traces;
+            if (selectedOption === "Core 0") {
+                tracesToNavigate = traces.filter((t) => t.coreId === 0);
+            } else if (selectedOption === "Core 1") {
+                tracesToNavigate = traces.filter((t) => t.coreId === 1);
+            }
 
             const { zoom, offsetTime } = viewState.current;
             if (!containerRef.current) return;
@@ -279,9 +378,11 @@ export default function PlaybackFlameGraph({
                     // Find the last trace that started before our current center point
                     let targetTrace = null;
                     // Iterate backwards (assuming traces is sorted by time)
-                    for (let i = traces.length - 1; i >= 0; i--) {
-                        if (BigInt(traces[i].startTime) < centerTime) {
-                            targetTrace = traces[i];
+                    for (let i = tracesToNavigate.length - 1; i >= 0; i--) {
+                        if (
+                            BigInt(tracesToNavigate[i].startTime) < centerTime
+                        ) {
+                            targetTrace = tracesToNavigate[i];
                             break;
                         }
                     }
@@ -299,9 +400,11 @@ export default function PlaybackFlameGraph({
                     // Jump to Next Trace
                     // Find the first trace that starts after our current center point
                     let targetTrace = null;
-                    for (let i = 0; i < traces.length; i++) {
-                        if (BigInt(traces[i].startTime) > centerTime) {
-                            targetTrace = traces[i];
+                    for (let i = 0; i < tracesToNavigate.length; i++) {
+                        if (
+                            BigInt(tracesToNavigate[i].startTime) > centerTime
+                        ) {
+                            targetTrace = tracesToNavigate[i];
                             break;
                         }
                     }
@@ -324,7 +427,7 @@ export default function PlaybackFlameGraph({
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [traces]); // Added traces to dependency so Q/E can access the data
+    }, [traces, selectedOption, draw]);
 
     // Resize Observer
     useEffect(() => {
@@ -334,7 +437,7 @@ export default function PlaybackFlameGraph({
         );
         resizeObserver.observe(containerRef.current);
         return () => resizeObserver.disconnect();
-    }, [traces]);
+    }, [draw]);
 
     return (
         <div

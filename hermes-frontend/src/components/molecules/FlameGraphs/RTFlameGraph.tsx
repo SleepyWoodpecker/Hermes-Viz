@@ -7,11 +7,11 @@ import {
 import type { TraceEntryCallStack } from "../../../types";
 import { getColor } from "../../../util";
 import Tooltip from "../../atoms/Tooltip";
-import FlameGraphCoreOptions from "../../atoms/FlameGraphCoreOptions";
 
 interface ExecutionFlameGraphProps {
     traces: TraceEntryCallStack[];
     connected: boolean;
+    selectedOption: "Core 0" | "Core 1" | "Both";
 }
 
 const GAP_THRESHOLD_MULTIPLIER = 5;
@@ -22,6 +22,7 @@ const CORE_LABEL_MARGIN = 40;
 export default function RTExecutionFlameGraph({
     traces,
     connected,
+    selectedOption,
 }: ExecutionFlameGraphProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -48,10 +49,6 @@ export default function RTExecutionFlameGraph({
     const [inspectedFunction, setInspectedFunction] =
         useState<TraceEntryCallStack | null>(null);
 
-    const [traceToDisplay, setTraceToDisplay] = useState<
-        "Core 0" | "Core 1" | "Both"
-    >("Both");
-
     // 1. Sync Data
     useEffect(() => {
         if (!traceStartTimeRef.current && traces.length > 0) {
@@ -65,9 +62,9 @@ export default function RTExecutionFlameGraph({
     }, [traces]);
 
     useEffect(() => {
-        if (traceToDisplay === "Both") {
+        if (selectedOption === "Both") {
             latestTracesRef.current = traces;
-        } else if (traceToDisplay === "Core 0") {
+        } else if (selectedOption === "Core 0") {
             latestTracesRef.current = traces.filter((t) => t.coreId === 0);
         } else {
             latestTracesRef.current = traces.filter((t) => t.coreId === 1);
@@ -80,7 +77,7 @@ export default function RTExecutionFlameGraph({
                 (a, b) => a - b
             );
         }
-    }, [traces, traceToDisplay]);
+    }, [traces, selectedOption]);
 
     // 2. Resize Observer (Resizes BOTH canvases for High DPI)
     useEffect(() => {
@@ -210,7 +207,7 @@ export default function RTExecutionFlameGraph({
                 ctx.fillText("Core 1", 5, Y_OFFSET + ROW_HEIGHT + height / 2);
 
                 ctx.fillStyle = "#808080";
-                ctx.fillRect(15, height / 2, width, 1);
+                ctx.fillRect(0, height / 2, width, 1);
 
                 ctx.restore();
             } else if (coreNumbersPresent.current.length === 1) {
@@ -325,7 +322,10 @@ export default function RTExecutionFlameGraph({
             // 5. Render Bars
             const renderMap = new Map();
             const ROW_HEIGHT =
-                coreNumbersPresent.current.length === 2 ? 20 : 40;
+                coreNumbersPresent.current.length === 2 &&
+                selectedOption === "Both"
+                    ? 20
+                    : 40;
             const Y_OFFSET = ROW_HEIGHT;
 
             visibleTraces.forEach((rect) => {
@@ -341,9 +341,9 @@ export default function RTExecutionFlameGraph({
                 let y = Y_OFFSET + (rect.depth - 1) * ROW_HEIGHT;
                 if (
                     coreNumbersPresent.current.length === 2 &&
-                    rect.coreId === 1
+                    rect.coreId === 1 &&
+                    selectedOption === "Both"
                 ) {
-                    console.log("HELLO");
                     y += height / 2;
                 }
 
@@ -439,14 +439,7 @@ export default function RTExecutionFlameGraph({
     };
 
     return (
-        <div className="flex flex-col p-2 px-0 gap-1">
-            <div className="p-2">
-                <FlameGraphCoreOptions
-                    selectedOption={traceToDisplay}
-                    setOption={setTraceToDisplay}
-                    availableOptions={["Core 0", "Core 1", "Both"]}
-                />
-            </div>
+        <div className="rounded-lg">
             <div
                 ref={containerRef}
                 style={{

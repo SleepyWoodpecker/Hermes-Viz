@@ -10,6 +10,7 @@ import { Toaster } from "sonner";
 import StatTable from "./components/molecules/StatTable";
 import RTExecutionFlameGraph from "./components/molecules/FlameGraphs/RTFlameGraph";
 import PlaybackFlameGraph from "./components/molecules/FlameGraphs/PlaybackFlameGraph";
+import FlameGraphCoreOptions from "./components/atoms/FlameGraphCoreOptions";
 
 const webSocketUrl = "ws://localhost:8080/data";
 const MAX_EXECUTION_LOGS = 250;
@@ -26,6 +27,10 @@ function App() {
     const [flameGraphLogs, setFlameGraphLogs] = useState<TraceEntryCallStack[]>(
         []
     );
+
+    const [traceToDisplay, setTraceToDisplay] = useState<
+        "Core 0" | "Core 1" | "Both"
+    >("Both");
 
     useEffect(() => {
         document.documentElement.classList.add("dark");
@@ -151,15 +156,25 @@ function App() {
                     </div>
                 </header>
 
-                <main className="flex-1 overflow-hidden rounded-lg  bg-slate-900/60">
+                <main className="flex-1 overflow-hidden rounded-lg  bg-slate-900/60 flex flex-col gap-1">
+                    <FlameGraphCoreOptions
+                        selectedOption={traceToDisplay}
+                        setOption={setTraceToDisplay}
+                        availableOptions={["Core 0", "Core 1", "Both"]}
+                        className="mt-1"
+                    />
                     <div className="flex flex-col gap-4">
-                        {true ? (
+                        {connected ? (
                             <RTExecutionFlameGraph
                                 traces={flameGraphLogs}
                                 connected={true}
+                                selectedOption={traceToDisplay}
                             />
                         ) : (
-                            <PlaybackFlameGraph traces={flameGraphLogs} />
+                            <PlaybackFlameGraph
+                                traces={flameGraphLogs}
+                                selectedOption={traceToDisplay}
+                            />
                         )}
                         <div className="grid grid-cols-2 gap-4">
                             <StatTable statMap={stats} />
